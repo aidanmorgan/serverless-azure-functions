@@ -20,6 +20,7 @@ class AzureDeployFunction {
       'deploy:function:deploy': () => BbPromise.bind(this)
         .then(this.provider.initialize(this.serverless,this.options))
         .then(this.loginToAzure)
+        .then(() => this.provider.getDeployedFunctionsNames())
         .then(this.createFunction)
         .then(() => this.serverless.cli.log('Successfully uploaded Function'))
     };

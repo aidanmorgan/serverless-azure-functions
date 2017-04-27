@@ -24,6 +24,7 @@ class AzureDeploy {
       'before:deploy:deploy': () => BbPromise.bind(this)
         .then(this.provider.initialize(this.serverless, this.options))
         .then(this.loginToAzure)
+        .then(() => this.provider.getDeployedFunctionsNames())
         .then(this.cleanUpFunctions),
 
       'deploy:deploy': () => BbPromise.bind(this)

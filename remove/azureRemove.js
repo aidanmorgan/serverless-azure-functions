@@ -1,7 +1,7 @@
 'use strict';
 
 const BbPromise = require('bluebird');
-const deleteResourceGroup = require('./lib/deleteResourceGroup');
+const removeFunctions = require('./lib/removeFunctions');
 const loginToAzure = require('../shared/loginToAzure');
 
 class AzureRemove {
@@ -13,15 +13,15 @@ class AzureRemove {
     Object.assign(
       this,
       loginToAzure,
-      deleteResourceGroup
+      removeFunctions
     );
 
     this.hooks = {
       'remove:remove': () => BbPromise.bind(this)
         .then(this.provider.initialize(this.serverless,this.options))
         .then(this.loginToAzure)
-        .then(this.deleteResourceGroup)
-        .then(() => this.serverless.cli.log('Service successfully removed'))
+        .then(this.removeFunctions)
+        .then(() => this.serverless.cli.log('Service(s) successfully removed'))
     };
   }
 }

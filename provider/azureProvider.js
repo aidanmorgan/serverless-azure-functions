@@ -27,6 +27,7 @@ let principalCredentials;
 let functionsFolder;
 let existingFunctionApp = false;
 let parsedBindings;
+
 const zipArray = [];
 const deployedFunctionNames = [];
 
@@ -81,7 +82,18 @@ return constants.providerName;
 
         functionAppName = this.serverless.service.service;
 
+        if(this.serverless.service.provider.functionAppName) {
+          this.serverless.cli.log(`Using custom Function App Name: ${this.serverless.service.provider.functionAppName}`);
+          functionAppName = this.serverless.service.provider.functionAppName;
+        }
+
         resourceGroupName = `${functionAppName}-rg`;
+
+        if(this.serverless.service.provider.resourceGroup) {
+          this.serverless.cli.log(`Using custom Resource Group: ${this.serverless.service.provider.resourceGroup}`);
+          resourceGroupName = this.serverless.service.provider.resourceGroup;
+        }
+
         deploymentName = `${resourceGroupName}-deployment`;
         functionsFolder = path.join(this.serverless.config.servicePath, 'functions');
 
@@ -208,29 +220,13 @@ return new BbPromise((resolve, reject) => {
     const resourceClient = new resourceManagement.ResourceManagementClient(principalCredentials, subscriptionId);
 
 return new BbPromise((resolve, reject) => {
-      resourceClient.deployments.deleteMethod(resourceGroupName,
-        deploymentName, (error, result, deleteRequest, response) => {
+      resourceClient.deployments.deleteMethod(resourceGroupName, deploymentName, (error, result, deleteRequest, response) => {
           if (error) {
             reject(error);
           } else {
             resolve(result);
           }
         });
-    });
-  }
-
-  DeleteResourceGroup () {
-    this.serverless.cli.log(`Deleting resource group: ${resourceGroupName}`);
-    const resourceClient = new resourceManagement.ResourceManagementClient(principalCredentials, subscriptionId);
-
-return new BbPromise((resolve, reject) => {
-      resourceClient.resourceGroups.deleteMethod(resourceGroupName, (error, result, deleteRequest, response) => {
-        if (error) {
-          reject(error);
-        } else {
-          resolve(result);
-        }
-      });
     });
   }
 
@@ -321,8 +317,6 @@ return new BbPromise((resolve, reject) => {
     };
 
 return new BbPromise((resolve, reject) => {
-      if (existingFunctionApp) {
-        this.serverless.cli.log('Looking for deployed functions that are not part of the current deployment...');
         request(options, (err, res, body) => {
           if (err) {
             if (err.message.includes('ENOTFOUND')) {
@@ -341,9 +335,6 @@ return new BbPromise((resolve, reject) => {
             resolve(res);
           }
         });
-      } else {
-        resolve('New service...');
-      }
     });
   }
 
@@ -566,20 +557,37 @@ return new BbPromise((resolve, reject) => {
 
   }
 
-  cleanUpFunctionsBeforeDeploy (serverlessFunctions) {
+  deleteFunctionsExcluding(serverlessFunctions) {
+    return this._deleteFunctions((functionName) => {
+      var result = serverlessFunctions.indexOf(functionName) < 0;
+      return result;
+    });
+  };
+
+  deleteFunctions(serverlessFunctions) {
+    return this._deleteFunctions((functionName) => {
+      var result = serverlessFunctions.indexOf(functionName) >= 0;
+      return result;
+    });
+  };
+
+  _deleteFunctions(test) {
     const deleteFunctionPromises = [];
 
     deployedFunctionNames.forEach((functionName) => {
-      if (serverlessFunctions.indexOf(functionName) < 0) {
-        this.serverless.cli.log(`Deleting function : ${functionName}`);
+      if (test(functionName)) {
         deleteFunctionPromises.push(this.deleteFunction(functionName));
       }
     });
 
-return BbPromise.all(deleteFunctionPromises);
-  }
+    var promises = BbPromise.all(deleteFunctionPromises);
+    return promises;
+  };
+
 
   deleteFunction(functionName) {
+    this.serverless.cli.log(`Requesting deletion of ${functionName}`);    
+
     const requestUrl = `https://${functionAppName}${constants.scmVfsPath}${functionName}/?recursive=true`;
     const options = {
       'host': functionAppName + constants.scmDomain,
@@ -603,10 +611,10 @@ return new BbPromise((resolve, reject) => {
     });
   }
 
-  uploadPackageJson () {
+  uploadPackageJson (functionName) {
     const packageJsonFilePath = path.join(this.serverless.config.servicePath, 'package.json');
     this.serverless.cli.log(`Uploading pacakge.json ...`);
-    const requestUrl = `https://${functionAppName}${constants.scmVfsPath}package.json`;
+    const requestUrl = `https://${functionAppName}${constants.scmVfsPath}${functionName}package.json`;
     const options = {
       'host': functionAppName + constants.scmDomain,
       'method': 'put',
